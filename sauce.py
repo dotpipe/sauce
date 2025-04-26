@@ -235,53 +235,35 @@ class MusicSynthesizerApp:
             global_step += 1
             time.sleep(interval)
 
-    def apply_adsr(self, samples, attack, decay, sustain, release, duration, sample_rate):
-        total_samples = int(duration * sample_rate)
+    def apply_adsr(self, samples, attack, decay, sustain, release, duration_sec, sample_rate):
+        total_samples = samples.shape[0]
+        
+        # Calculate ADSR section lengths
+        attack_samples = int(sample_rate * attack)
+        decay_samples = int(sample_rate * decay)
+        release_samples = int(sample_rate * release)
+        sustain_samples = max(total_samples - (attack_samples + decay_samples + release_samples), 0)
 
-        # Limit parameters
-        attack = max(0.001, min(attack, 0.9))
-        decay = max(0.001, min(decay, 0.9))
-        release = max(0.001, min(release, 0.9))
-        sustain = max(0.0, min(sustain, 1.0))
+        # Build the envelope parts
+        attack_curve = np.linspace(0, 1, attack_samples) ** 2  # <-- Smoother attack (exponential curve)
+        decay_curve = np.linspace(1, sustain, decay_samples) ** 2  # <-- Smoother decay
+        sustain_curve = np.ones(sustain_samples) * (sustain ** 2)  # <-- Flattened sustain
+        release_curve = (np.linspace(sustain, 0, release_samples) ** 2)  # <-- Smooth release
 
-        # Normalize if attack+decay+release > 1
-        total_adsr = attack + decay + release
-        if total_adsr >= 1.0:
-            factor = 0.99 / total_adsr
-            attack *= factor
-            decay *= factor
-            release *= factor
+        # Concatenate all parts
+        envelope = np.concatenate((attack_curve, decay_curve, sustain_curve, release_curve))
 
-        attack_samples = int(attack * total_samples)
-        decay_samples = int(decay * total_samples)
-        release_samples = int(release * total_samples)
+        # Make sure envelope matches samples length exactly
+        if len(envelope) < total_samples:
+            envelope = np.pad(envelope, (0, total_samples - len(envelope)))
+        else:
+            envelope = envelope[:total_samples]
 
-        sustain_samples = total_samples - (attack_samples + decay_samples + release_samples)
-        if sustain_samples < 0:
-            sustain_samples = 0
-
-        # Envelope
-        envelope = np.zeros(total_samples)
-
-        if attack_samples > 0:
-            envelope[:attack_samples] = np.linspace(0, 1, attack_samples, endpoint=False)
-        if decay_samples > 0:
-            envelope[attack_samples:attack_samples + decay_samples] = np.linspace(1, sustain, decay_samples, endpoint=False)
-        if sustain_samples > 0:
-            envelope[attack_samples + decay_samples:attack_samples + decay_samples + sustain_samples] = sustain
-        if release_samples > 0:
-            envelope[attack_samples + decay_samples + sustain_samples:] = np.linspace(sustain, 0, release_samples)
-
-        # Apply envelope
+        # Apply envelope to both stereo channels
         samples = samples * envelope[:, np.newaxis]
 
-        # Clip between -1.0 and 1.0 to prevent overflow noise
-        samples = np.clip(samples, -1.0, 1.0)
-
-        # Convert to int16
-        samples = (samples * 32767).astype(np.int16)
-
         return samples
+
 
 # After applying ADSR:
     def play_voice(self, instrument_index):
