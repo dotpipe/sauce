@@ -105,7 +105,7 @@ class MusicSynthesizerApp:
             tk.Label(parent, text=f"EQ{j+1}").grid(row=2, column=j)
             tk.Scale(parent, variable=eq[j], from_=0.0, to=1.0, resolution=0.01, orient=tk.VERTICAL).grid(row=3, column=j)
 
-        self.voices.append({"params": sliders, "eq": eq})
+        # self.voices.append({"params": sliders, "eq": eq})
 
         # Create horizontal sliders for Left and Right volume controls
         tk.Label(parent, text="Left").grid(row=NUM_BANDS + len(eq), column=0, padx=5, pady=5)
@@ -172,7 +172,7 @@ class MusicSynthesizerApp:
         right_volume = total_volume_db + 5  # Right channel slightly louder
         
         # Generate tone with stereo configuration
-        tone = generate_pygame_tone(freq, duration_ms, left_volume, stereo=True)
+        tone = generate_pygame_tone(freq, duration_ms, left_volume)
 
         # Play tone
         tone.play()
