@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 # Initialize Pygame Mixer
-pygame.mixer.init(frequency=44100, size=-16, channels=1)
+pygame.mixer.init(frequency=44100, size=-16, channels=2)  # Changed to stereo (2 channels)
 
 # Constants
 SAMPLE_RATE = 44100
@@ -16,17 +16,24 @@ NUM_BANDS = 6
 STEP_COUNT = 16  # Updated to 32 steps
 
 def generate_pygame_tone(frequency=440, duration_ms=500, volume_db=-10.0):
+    # Generate a mono sine wave
     samples = np.sin(2 * np.pi * frequency * np.arange(SAMPLE_RATE * duration_ms / 1000.0) / SAMPLE_RATE)
-    samples = np.int16(samples * (2**15 - 1))
-    sound = pygame.sndarray.make_sound(samples)
-    sound.set_volume(10 ** (volume_db / 20))
+    samples = np.int16(samples * (2**15 - 1))  # Convert to 16-bit PCM
+
+    # Convert to stereo by duplicating the mono samples in two channels (left and right)
+    stereo_samples = np.column_stack((samples, samples))  # Create 2D array for stereo
+    
+    # Apply volume
+    sound = pygame.sndarray.make_sound(stereo_samples)
+    sound.set_volume(10 ** (volume_db / 20))  # Apply volume control (in dB)
     return sound
 
 def check_sound_system():
     try:
-        tone = pygame.sndarray.make_sound(np.ones(int(SAMPLE_RATE * DURATION), dtype=np.int16))
+        # Ensure the size is an integer for numpy ones
+        tone = pygame.sndarray.make_sound(np.ones((int(SAMPLE_RATE * DURATION), 2), dtype=np.int16))  # Stereo array
         tone.play()
-        time.sleep(1)
+        pygame.time.delay(1000)  # Wait 1 second to test sound
         print("Sound system is working!")
         return True
     except pygame.error:
@@ -100,6 +107,22 @@ class MusicSynthesizerApp:
 
         self.voices.append({"params": sliders, "eq": eq})
 
+        # Create horizontal sliders for Left and Right volume controls
+        tk.Label(parent, text="Left").grid(row=NUM_BANDS + len(eq), column=0, padx=5, pady=5)
+        tk.Label(parent, text="Right").grid(row=NUM_BANDS + len(eq), column=1, padx=5, pady=5)
+
+        left_volume = tk.DoubleVar(value=0.5)
+        right_volume = tk.DoubleVar(value=0.5)
+
+        left_vol_slider = tk.Scale(parent, variable=left_volume, from_=0.0, to=1.0, resolution=0.01, orient=tk.VERTICAL)
+        right_vol_slider = tk.Scale(parent, variable=right_volume, from_=0.0, to=1.0, resolution=0.01, orient=tk.VERTICAL)
+
+        left_vol_slider.grid(row=NUM_BANDS + len(eq) + 1, column=0, padx=5)
+        right_vol_slider.grid(row=NUM_BANDS + len(eq) + 1, column=1, padx=5)
+
+        self.voices.append({"params": sliders, "eq": eq, "left_vol": left_volume, "right_vol": right_volume})
+
+
     def create_sequencer(self):
         self.sequence = []
         for i in range(NUM_VOICES):
@@ -143,7 +166,15 @@ class MusicSynthesizerApp:
         duration_ms = 500
 
         total_volume_db = -40 + (vol + gain) * 20
-        tone = generate_pygame_tone(freq, duration_ms, total_volume_db)
+        
+        # Set stereo balance (e.g., left volume = 80% of total volume, right volume = 120%)
+        left_volume = total_volume_db - 5  # Left channel slightly quieter
+        right_volume = total_volume_db + 5  # Right channel slightly louder
+        
+        # Generate tone with stereo configuration
+        tone = generate_pygame_tone(freq, duration_ms, left_volume, stereo=True)
+
+        # Play tone
         tone.play()
 
 if __name__ == '__main__':
