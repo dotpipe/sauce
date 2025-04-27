@@ -74,6 +74,7 @@ class MusicSynthesizerApp:
         self.voices = []
         self.tempo = tk.IntVar(value=120)
         self.running = False
+        self.mute_var = tk.BooleanVar(value=False)
 
         if not check_sound_system():
             self.root.quit()
@@ -150,7 +151,8 @@ class MusicSynthesizerApp:
             "eq": eq,
             "left_vol": left_volume,
             "right_vol": right_volume,
-            "distortion": distortion
+            "distortion": distortion,
+            "mute": self.mute_var   # <-- add this
         })
 
     def save_pattern(self):
@@ -207,12 +209,21 @@ class MusicSynthesizerApp:
         self.sequence = []
         for i in range(NUM_VOICES):
             row = []
+            # Create a mute button for each voice
+            mute_var = tk.BooleanVar(value=False)
+            mute_button = tk.Checkbutton(self.seq_frame, text="Mute", variable=mute_var)
+            mute_button.grid(row=i, column=0)  # Place mute button at column 0
+            row.append(mute_var)  # Store mute_var, not the button itself
+            
+            # Create step buttons
             for j in range(STEP_COUNT):
                 var = tk.IntVar()
                 cb = tk.Checkbutton(self.seq_frame, variable=var)
-                cb.grid(row=i, column=j)
+                cb.grid(row=i, column=j+1)  # Shift steps by +1 to make room for mute
                 row.append(var)
+            
             self.sequence.append(row)
+
 
     def start_sequencer(self):
         if not self.running:
@@ -230,8 +241,10 @@ class MusicSynthesizerApp:
             for i, voice in enumerate(self.voices):
                 voice_loop = int(voice["params"]["Loop"].get())
                 step_index = global_step % voice_loop
-                if step_index < STEP_COUNT and self.sequence[i][step_index].get():
-                    self.play_voice(i)
+                if not voice["mute"].get():
+                    if step_index < STEP_COUNT and self.sequence[i][step_index].get():
+                        self.play_voice(i)
+
             global_step += 1
             time.sleep(interval)
 
@@ -295,10 +308,16 @@ class MusicSynthesizerApp:
                                     distortion_amount=distortion, eq=eq_values,
                                     left_vol=left_vol, right_vol=right_vol)
         
+        import numpy as np
         # Apply ADSR envelope
         samples = pygame.sndarray.array(tone)
         samples = np.copy(samples)
         samples = self.apply_adsr(samples, attack, decay, sustain, release, duration_ms / 1000.0, SAMPLE_RATE)
+
+
+        # Before calling make_sound
+        if samples.dtype != np.int16:
+            samples = samples.astype(np.int16)
 
 
         # Play the tone with ADSR applied
