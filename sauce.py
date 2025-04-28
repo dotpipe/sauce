@@ -69,7 +69,7 @@ def check_sound_system():
 class MusicSynthesizerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Modular Synth Rack")
+        self.root.title("Sauce Rack v2.1")
         self.voice_data = []
         self.voices = []
         self.tempo = tk.IntVar(value=120)
@@ -241,9 +241,11 @@ class MusicSynthesizerApp:
             for i, voice in enumerate(self.voices):
                 voice_loop = int(voice["params"]["Loop"].get())
                 step_index = global_step % voice_loop
-                if not voice["mute"].get():
-                    if step_index < STEP_COUNT and self.sequence[i][step_index].get():
-                        self.play_voice(i)
+                if self.sequence[i][0].get() == True:
+                    continue
+                # Check if the voice is muted before proceeding with step
+                if step_index < STEP_COUNT and self.sequence[i][step_index].get():
+                    self.play_voice(i)
 
             global_step += 1
             time.sleep(interval)
@@ -283,6 +285,10 @@ class MusicSynthesizerApp:
         if instrument_index >= len(self.voices):
             return
         voice = self.voices[instrument_index]
+
+        if voice["mute"].get():  # Skip playing if the voice is muted
+            return
+        
         params = voice["params"]
 
         freq1 = params["P1"].get()
@@ -308,21 +314,16 @@ class MusicSynthesizerApp:
                                     distortion_amount=distortion, eq=eq_values,
                                     left_vol=left_vol, right_vol=right_vol)
         
-        import numpy as np
         # Apply ADSR envelope
         samples = pygame.sndarray.array(tone)
-        samples = np.copy(samples)
+        samples = np.copy(samples)  # Ensure the samples are a numpy array
         samples = self.apply_adsr(samples, attack, decay, sustain, release, duration_ms / 1000.0, SAMPLE_RATE)
 
+        samples = np.array(samples, dtype=np.int32)
+        # Convert the processed samples to sound and play them
+        sound = pygame.sndarray.make_sound(samples)
+        sound.play()
 
-        # Before calling make_sound
-        if samples.dtype != np.int16:
-            samples = samples.astype(np.int16)
-
-
-        # Play the tone with ADSR applied
-        tone = pygame.sndarray.make_sound(samples)
-        tone.play()
 
 if __name__ == "__main__":
     root = tk.Tk()
